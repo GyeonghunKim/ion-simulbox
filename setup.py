@@ -1,11 +1,11 @@
 from setuptools import setup
 
 setup(
-    name="ion_toolkit",
+    name="ion_simulbox",
     version="1.0",
-    description="Ion manipulation toolkit",
+    description="Ion-laser-cavity simulation toolbox",
     author="Gyeonghun Kim",
     author_email="gyeonghun.kim@duke.edu",
-    packages=["ion_toolkit"],  # same as name
+    packages=["ion_simulbox"],  # same as name
     install_requires=[],
 )
