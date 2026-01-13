@@ -2,6 +2,7 @@ from typing import List, Dict, Tuple
 import numpy as np
 from sympy import S
 from sympy.physics.wigner import wigner_3j
+import qutip
 from .ion import Ion
 from .laser import Laser
 from .energy_level import (
@@ -11,6 +12,7 @@ from .energy_level import (
     FineStructure,
     HyperfineStructure,
 )
+from itertools import combinations
 from enum import Enum
 from .units import Constants, Units
 from .utils import number_to_sympy, sympy_to_number
@@ -37,22 +39,20 @@ class Transition:
         else:
             self.lower_level = level_1
             self.upper_level = level_2
-        self.transition_order = self.get_transition_order()
-        self.transition_linewidth = (
-            self.upper_level.line_width
-            + self.lower_level.line_width
-            + self.laser.line_width
-        )
-        self.transition_branching_ratio = self.get_transition_branching_ratio()
+        self.order = self.get_order()
+        self.linewidth = self.upper_level.line_width
+        self.frequency = (
+            self.upper_level.energy - self.lower_level.energy
+        ) / Constants.h
+        self.angular_frequency = 2 * np.pi * self.frequency
+        self.detunning = 2 * np.pi * (laser.frequency - self.frequency)
+        self.branching_ratio = self.get_branching_ratio()
         self.rabi_frequency = self.get_rabi_frequency()
 
-    def get_transition_branching_ratio(self):
+    def get_branching_ratio(self):
         return self.upper_level.branching_ratios[self.lower_level.name]
 
-    def get_transition_energy(self):
-        return self.level1.energy - self.level2.energy
-
-    def get_transition_order(self):
+    def get_order(self):
         if abs(self.lower_level.L - self.upper_level.L) == 1:
             return TransitionOrder.dipole
         elif abs(self.lower_level.L - self.upper_level.L) == 2:
@@ -67,7 +67,7 @@ class Transition:
         return self.__str__()
 
     def get_rabi_frequency(self):
-        if self.transition_order == TransitionOrder.dipole:
+        if self.order == TransitionOrder.dipole:
             coefficient = (
                 self.laser.get_electric_field_amplitude()
                 / Constants.h_bar
@@ -76,8 +76,8 @@ class Transition:
                     * Constants.epsilon_0
                     * Constants.h_bar
                     * self.laser.wavelength**3
-                    * self.transition_branching_ratio
-                    * self.transition_linewidth
+                    * self.branching_ratio
+                    * self.linewidth
                     / (8 * np.pi**2)
                 )
             ) * np.sqrt(2 * self.upper_level.J + 1)
@@ -102,7 +102,7 @@ class Transition:
                     )
                 )
             return sign * coefficient * polarization_effect
-        elif self.transition_order == TransitionOrder.quadrupole:
+        elif self.order == TransitionOrder.quadrupole:
             raise NotImplementedError("Quadrupole transitions not implemented")
         else:
             raise ValueError("Transition order not supported")
@@ -131,48 +131,8 @@ class Experiment:
         return levels
 
     def get_hamiltonian(self, using_rwa: bool = True):
-        """Construct the system Hamiltonian.
-
-        Parameters
-        ----------
-        using_rwa : bool, optional
-            If ``True`` the interaction Hamiltonian is constructed under the
-            rotating wave approximation.
-        """
-        import qutip as qt
-
-        levels = self._collect_levels()
-        n = len(levels)
-        energies = [lev.energy / Constants.h_bar for lev in levels]
-        H0 = qt.Qobj(np.diag(energies))
-
-        H = [H0]
-
-        for tr in self.transitions:
-            i = levels.index(tr.lower_level)
-            j = levels.index(tr.upper_level)
-            op = qt.basis(n, j) * qt.basis(n, i).dag()
-            if using_rwa:
-                w0 = abs(tr.upper_level.energy - tr.lower_level.energy) / Constants.h
-                delta = tr.laser.get_frequency() - w0
-
-                def f_plus(t, args=None, Omega=tr.rabi_frequency, d=delta):
-                    return 0.5 * Omega * np.exp(-1j * d * t)
-
-                def f_minus(t, args=None, Omega=tr.rabi_frequency, d=delta):
-                    return 0.5 * Omega * np.exp(1j * d * t)
-
-                H.append([op, f_plus])
-                H.append([op.dag(), f_minus])
-            else:
-                wL = tr.laser.get_frequency()
-
-                def f(t, args=None, Omega=tr.rabi_frequency, w=wL):
-                    return Omega * np.cos(w * t)
-
-                H.append([op + op.dag(), f])
-
-        return H, levels
+        pass
+        # TODO
 
     def solve(
         self,
@@ -180,19 +140,8 @@ class Experiment:
         using_rwa: bool = True,
         initial_state=None,
     ):
-        """Solve the Schr\u00f6dinger equation for the experiment."""
-        import qutip as qt
-
-        H, levels = self.get_hamiltonian(using_rwa=using_rwa)
-        n = len(levels)
-        if initial_state is None:
-            initial_state = qt.basis(n, 0)
-
-        e_ops = [qt.basis(n, i) * qt.basis(n, i).dag() for i in range(n)]
-        result = qt.sesolve(H, initial_state, t_list, e_ops=e_ops)
-        self._last_levels = levels
-        self._last_result = result
-        return result
+        pass
+        # TODO
 
     def plot_populations(self, result=None):
         """Plot state populations as a function of time."""
@@ -211,51 +160,46 @@ class Experiment:
         plt.legend()
         plt.tight_layout()
         plt.show()
-    
-    def add_laser(
-        self, laser: Laser, transition_pair: List[Tuple[EnergyLevel, EnergyLevel]]
-    ):
-        self.lasers.append(laser)
-        for level_1, level_2 in transition_pair:
-            if isinstance(level_1, FineStructure) or isinstance(
-                level_1, HyperfineStructure
-            ):
-                if isinstance(level_2, FineStructure) or isinstance(
-                    level_2, HyperfineStructure
-                ):
-                    # level_1 is a FineStructure or HyperfineStructure and level_2 is a FineStructure or HyperfineStructure
-                    for level_1_zeeman_level in level_1.zeeman_levels:
-                        for level_2_zeeman_level in level_2.zeeman_levels:
+
+    def compile(self):
+        if len(self.levels) < 2:
+            raise ValueError(
+                "At least two levels are required to compile the experiment"
+            )
+        if isinstance(self.levels[0], FineStructure):
+            for level_1, level_2 in combinations(self.levels, 2):
+                if level_1.energy > level_2.energy:
+                    lower_level = level_2
+                    upper_level = level_1
+                else:
+                    lower_level = level_1
+                    upper_level = level_2
+
+                # Temporal
+                if abs(lower_level.L - upper_level.L) == 2:
+                    print("Quadrupole transition not supported yet")
+                    continue
+                for laser in self.lasers:
+                    for zeeman_level_1 in lower_level.zeeman_levels:
+                        for zeeman_level_2 in upper_level.zeeman_levels:
                             self.transitions.append(
                                 Transition(
-                                    level_1_zeeman_level,
-                                    level_2_zeeman_level,
+                                    zeeman_level_1,
+                                    zeeman_level_2,
                                     laser,
                                     self.magnetic_field,
                                 )
                             )
-                else:
-                    for zeeman_level in level_1.zeeman_levels:
-                        self.transitions.append(
-                            Transition(
-                                zeeman_level, level_2, laser, self.magnetic_field
-                            )
-                        )
-            else:
-                if isinstance(level_2, FineStructure) or isinstance(
-                    level_2, HyperfineStructure
-                ):
-                    # level_1 is a ZeemanLevel and level_2 is a FineStructure or HyperfineStructure
-                    for zeeman_level in level_2.zeeman_levels:
-                        self.transitions.append(
-                            Transition(
-                                level_1, zeeman_level, laser, self.magnetic_field
-                            )
-                        )
-                else:  # level_1 is a ZeemanLevel and level_2 is ZeemanLevel
-                    self.transitions.append(
-                        Transition(level_1, level_2, laser, self.magnetic_field)
-                    )
+
+        elif isinstance(self.levels[0], HyperfineStructure):
+            raise ValueError("HyperfineStructure levels are not supported yet")
+        else:
+            raise ValueError("Unsupported level type")
+
+    def add_laser(
+        self, laser: Laser  # , transition_pair: List[Tuple[EnergyLevel, EnergyLevel]]
+    ):
+        self.lasers.append(laser)
 
     def plot_transitions(self):
         """Plot available transitions with their Rabi frequencies."""
@@ -301,12 +245,22 @@ class Experiment:
         for t in self.transitions:
             if t.rabi_frequency == 0:
                 continue
+            mixing_angle = np.arcsin(
+                abs(t.rabi_frequency)
+                / np.sqrt(abs(t.rabi_frequency) ** 2 + t.detunning**2)
+            )
             x1 = level_pos[t.lower_level]
             x2 = level_pos[t.upper_level]
             y1 = energies_thz[t.lower_level]
             y2 = energies_thz[t.upper_level]
             width = 1 + 4 * abs(t.rabi_frequency) / max_rabi
-            plt.plot([x1, x2], [y1, y2], color=laser_color[t.laser], linewidth=width)
+            plt.plot(
+                [x1, x2],
+                [y1, y2],
+                color=laser_color[t.laser],
+                linewidth=width,
+                alpha=mixing_angle / (np.pi / 2),
+            )
 
         # make legend for lasers
         from matplotlib.lines import Line2D

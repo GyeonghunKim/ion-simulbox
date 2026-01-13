@@ -14,7 +14,7 @@ class Polarization:
         self.epsilon_1 = epsilon_1
         self.k_hat = k_hat / np.linalg.norm(k_hat)
         z_hat = np.array([0, 0, 1])
-        if np.isclose(np.dot(self.k_hat, z_hat), 1):
+        if np.isclose(abs(np.dot(self.k_hat, z_hat)), 1):
             self.epsilon_0_unit_vector = np.array([1, 0, 0])
             self.epsilon_1_unit_vector = np.array([0, 1, 0])
         else:
