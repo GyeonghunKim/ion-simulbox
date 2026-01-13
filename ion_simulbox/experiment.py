@@ -116,6 +116,13 @@ class Experiment:
         self.transitions: List[Transition] = []
         self.ion.apply_magnetic_field(magnetic_field)
         self.lasers: List[Laser] = []
+        self.decay_channels = {}
+        self.kets = {}
+
+        self.total_level_name_map = {}
+        for level in self.ion.energy_levels:
+            self.total_level_name_map[level.name] = level
+        self.c_ops = []
 
     def add_levels(self, levels: List[EnergyLevel]):
         self.levels.extend(levels)
@@ -143,29 +150,13 @@ class Experiment:
         pass
         # TODO
 
-    def plot_populations(self, result=None):
-        """Plot state populations as a function of time."""
-        import matplotlib.pyplot as plt
-
-        if result is None:
-            result = getattr(self, "_last_result", None)
-            if result is None:
-                return
-        levels = getattr(self, "_last_levels", self._collect_levels())
-        times = result.times
-        for i, lev in enumerate(levels):
-            plt.plot(times, result.expect[i], label=lev.name)
-        plt.xlabel("Time (s)")
-        plt.ylabel("Population")
-        plt.legend()
-        plt.tight_layout()
-        plt.show()
-
     def compile(self):
         if len(self.levels) < 2:
             raise ValueError(
                 "At least two levels are required to compile the experiment"
             )
+
+        # Setup transitions
         if isinstance(self.levels[0], FineStructure):
             for level_1, level_2 in combinations(self.levels, 2):
                 if level_1.energy > level_2.energy:
@@ -195,6 +186,93 @@ class Experiment:
             raise ValueError("HyperfineStructure levels are not supported yet")
         else:
             raise ValueError("Unsupported level type")
+
+        level_name_map = {}
+        for level in self.levels:
+            level_name_map[level.name] = level
+            for zeeman_level in level.zeeman_levels:
+                self.kets[zeeman_level] = None
+        n_levels = len(self.kets) + 1
+        for i, level in enumerate(self.kets.keys()):
+            self.kets[level] = qutip.basis(n_levels, i)
+        self.kets["dummy"] = qutip.basis(n_levels, n_levels - 1)
+
+        self.level_name_map = level_name_map
+
+        # Setup decay channels
+        for level_from in self.levels:
+            for level_to_name, branching_ratio in self.ion.branching_ratios[
+                level_from.name
+            ].items():
+                if level_to_name in level_name_map:
+                    level_to = level_name_map[level_to_name]
+                    for zeeman_level_from in level_from.zeeman_levels:
+                        for zeeman_level_to in level_to.zeeman_levels:
+                            cg_coefficient = (
+                                abs(
+                                    sympy_to_number(
+                                        wigner_3j(
+                                            number_to_sympy(zeeman_level_from.J),
+                                            number_to_sympy(1),
+                                            number_to_sympy(zeeman_level_to.J),
+                                            number_to_sympy(zeeman_level_from.m),
+                                            number_to_sympy(
+                                                zeeman_level_to.m - zeeman_level_from.m
+                                            ),
+                                            number_to_sympy(-1 * zeeman_level_to.m),
+                                        )
+                                    )
+                                )
+                                ** 2
+                            )
+                            self.decay_channels[
+                                (zeeman_level_from, zeeman_level_to)
+                            ] = (
+                                branching_ratio
+                                * zeeman_level_from.line_width
+                                * cg_coefficient
+                            )
+                            L = np.sqrt(
+                                self.decay_channels[
+                                    (zeeman_level_from, zeeman_level_to)
+                                ]
+                            ) * (
+                                self.kets[zeeman_level_to]
+                                * self.kets[zeeman_level_from].dag()
+                            )
+                            self.c_ops.append(L)
+                else:
+                    level_to = self.total_level_name_map[level_to_name]
+                    for zeeman_level_from in level_from.zeeman_levels:
+                        for zeeman_level_to in level_to.zeeman_levels:
+                            cg_coefficient = (
+                                abs(
+                                    sympy_to_number(
+                                        wigner_3j(
+                                            number_to_sympy(zeeman_level_from.J),
+                                            number_to_sympy(1),
+                                            number_to_sympy(zeeman_level_to.J),
+                                            number_to_sympy(zeeman_level_from.m),
+                                            number_to_sympy(
+                                                zeeman_level_to.m - zeeman_level_from.m
+                                            ),
+                                            number_to_sympy(-1 * zeeman_level_to.m),
+                                        )
+                                    )
+                                )
+                                ** 2
+                            )
+                            self.decay_channels[(zeeman_level_from, "dummy")] = (
+                                branching_ratio
+                                * zeeman_level_from.line_width
+                                * cg_coefficient
+                            )
+                            L = np.sqrt(
+                                self.decay_channels[(zeeman_level_from, "dummy")]
+                            ) * (
+                                self.kets["dummy"] * self.kets[zeeman_level_from].dag()
+                            )
+                            self.c_ops.append(L)
 
     def add_laser(
         self, laser: Laser  # , transition_pair: List[Tuple[EnergyLevel, EnergyLevel]]

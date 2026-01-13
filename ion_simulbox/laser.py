@@ -1,3 +1,4 @@
+from typing import Callable
 from .units import Constants
 import numpy as np
 
@@ -61,3 +62,19 @@ class Laser:
 
     def get_electric_field_amplitude(self):
         return np.sqrt(2 * self.intensity / (Constants.c * Constants.epsilon_0))
+
+
+class PulseLaser(Laser):
+    def __init__(
+        self,
+        name: str,
+        frequency: float,
+        intensity: float,
+        line_width: float,
+        polarization: Polarization,
+        pulse_shape: Callable[[float], float],
+        pulse_duration: float,
+    ):
+        super().__init__(name, frequency, intensity, line_width, polarization)
+        self.pulse_shape = pulse_shape
+        self.pulse_duration = pulse_duration
