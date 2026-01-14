@@ -57,24 +57,14 @@ class Laser:
         self.polarization = polarization
         self.k_hat = polarization.k_hat
 
-    def get_frequency(self):
-        return Constants.c / self.wavelength
-
     def get_electric_field_amplitude(self):
         return np.sqrt(2 * self.intensity / (Constants.c * Constants.epsilon_0))
 
 
-class PulseLaser(Laser):
-    def __init__(
-        self,
-        name: str,
-        frequency: float,
-        intensity: float,
-        line_width: float,
-        polarization: Polarization,
-        pulse_shape: Callable[[float], float],
-        pulse_duration: float,
-    ):
-        super().__init__(name, frequency, intensity, line_width, polarization)
-        self.pulse_shape = pulse_shape
-        self.pulse_duration = pulse_duration
+class EnvelopeFactory:
+    @staticmethod
+    def square_factory(t_start, duration: float):
+        return lambda t: 1 if t_start <= t < t_start + duration else 0
+    @staticmethod
+    def gaussian_factory(t_center: float, sigma: float):
+        return lambda t: np.exp(-(t - t_center)**2 / (2 * sigma**2))

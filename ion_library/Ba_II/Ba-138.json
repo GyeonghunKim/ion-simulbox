@@ -75,7 +75,14 @@
         {
             "upper_level": "5D2.5",
             "lower_level": "6S0.5",
-            "branching_ratio": 0.846
+            "branching_ratio": 0.846,
+            "source": "https://arxiv.org/pdf/1409.0873"
+        },
+        {
+            "upper_level": "5D2.5",
+            "lower_level": "5D1.5",
+            "branching_ratio": 0.154,
+            "source": "https://arxiv.org/pdf/1409.0873"
         }
     ]
 }

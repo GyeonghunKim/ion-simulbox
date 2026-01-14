@@ -19,6 +19,7 @@ class EnergyLevel:
         branching_ratios: List[Dict[str, float]],
     ):
         self.name = name
+        self.energy_0 = energy
         self.energy = energy
         self.n = n
         self.I = I
@@ -40,7 +41,8 @@ class FineStructureZeemanLevel(EnergyLevel):
         m: float,
         line_width: float,
         branching_ratios: List[Dict[str, float]],
-    ):
+        parent: "FineStructure",
+    ):  
         super().__init__(name, energy, n, I, L, J, line_width, branching_ratios)
         self.m = m
         self.lande_g_factor = 1 + (J * (J + 1) - L * (L + 1) + 0.5 * (0.5 + 1)) / (
@@ -49,16 +51,16 @@ class FineStructureZeemanLevel(EnergyLevel):
         self.zeeman_splitting_func: Callable[[float], float] = (
             lambda B_field: self.lande_g_factor * self.m * Constants.mu_B * B_field
         )
+        self.parent = parent
 
     def apply_magnetic_field(self, magentic_field: float):
-        self.energy = self.energy + self.zeeman_splitting_func(magentic_field)
+        self.energy = self.energy_0 + self.zeeman_splitting_func(magentic_field)
 
     def __str__(self):
-        return f"FineStructureZeemanLevel(energy={self.energy/Constants.h/Units.THz} THz, n={self.n}, I={self.I}, L={self.L}, J={self.J}, m_J={self.m})"
-
+        L_name = {0: "S", 1: "P", 2: "D", 3: "F"}[self.L]
+        return f"{self.n}{L_name}{self.J} m_J={self.m}"
     def __repr__(self):
         return self.__str__()
-
 
 class HyperfineStructureZeemanLevel(EnergyLevel):
     def __init__(
@@ -73,6 +75,7 @@ class HyperfineStructureZeemanLevel(EnergyLevel):
         m: float,
         line_width: float,
         branching_ratios: List[Dict[str, float]],
+        parent: "HyperfineStructure",
     ):
         super().__init__(name, energy, n, I, L, J, line_width, branching_ratios)
         self.F = F
@@ -83,16 +86,16 @@ class HyperfineStructureZeemanLevel(EnergyLevel):
         self.zeeman_splitting_func: Callable[[float], float] = (
             lambda B_field: self.lande_g_factor * self.m * Constants.mu_B * B_field
         )
-
+        self.parent = parent
+        
     def apply_magnetic_field(self, magentic_field: float):
-        self.energy = self.energy + self.zeeman_splitting_func(magentic_field)
+        self.energy = self.energy_0 + self.zeeman_splitting_func(magentic_field)
 
     def __str__(self):
-        return f"HyperfineStructureZeemanLevel(energy={self.energy/Constants.h/Units.THz} THz, n={self.n}, I={self.I}, L={self.L}, J={self.J}, F={self.F}, m_F={self.m})"
-
+        L_name = {0: "S", 1: "P", 2: "D", 3: "F"}[self.L]
+        return f"{self.n}{L_name}{self.J} F={self.F}, m_F={self.m}"
     def __repr__(self):
         return self.__str__()
-
 
 class FineStructure(EnergyLevel):
     def __init__(
@@ -113,7 +116,7 @@ class FineStructure(EnergyLevel):
         )
         self.zeeman_levels = [
             FineStructureZeemanLevel(
-                self.name,
+                self.name + f" m_J={m_J}",
                 self.energy,
                 self.n,
                 self.I,
@@ -122,6 +125,7 @@ class FineStructure(EnergyLevel):
                 m_J,
                 self.line_width,
                 self.branching_ratios,
+                self,
             )
             for m_J in np.arange(-J, J + 1)
         ]
@@ -129,16 +133,14 @@ class FineStructure(EnergyLevel):
 
     def apply_magnetic_field(self, magentic_field: float):
         for zeeman_level in self.zeeman_levels:
-            zeeman_level.energy = self.energy
             zeeman_level.apply_magnetic_field(magentic_field)
 
     def __str__(self):
-        return f"FineStructure(energy={self.energy/Constants.h/Units.THz} THz, n={self.n}, I={self.I}, L={self.L}, J={self.J})"
-
+        L_name = {0: "S", 1: "P", 2: "D", 3: "F"}[self.L]
+        return f"{self.n}{L_name}{self.J}"
     def __repr__(self):
         return self.__str__()
-
-
+    
 class HyperfineStructure(EnergyLevel):
     def __init__(
         self,
@@ -160,7 +162,7 @@ class HyperfineStructure(EnergyLevel):
         )
         self.zeeman_levels = [
             HyperfineStructureZeemanLevel(
-                self.name,
+                self.name + f" m_F={m_F}",
                 self.energy,
                 self.n,
                 self.I,
@@ -170,6 +172,7 @@ class HyperfineStructure(EnergyLevel):
                 m_F,
                 self.line_width,
                 self.branching_ratios,
+                self,
             )
             for m_F in np.arange(-F, F + 1)
         ]
@@ -181,7 +184,7 @@ class HyperfineStructure(EnergyLevel):
             zeeman_level.apply_magnetic_field(magentic_field)
 
     def __str__(self):
-        return f"HyperfineStructure(energy={self.energy/Constants.h/Units.THz} THz, n={self.n}, I={self.I}, L={self.L}, J={self.J}, F={self.F})"
-
+        L_name = {0: "S", 1: "P", 2: "D", 3: "F"}[self.L]
+        return f"{self.n}{L_name}{self.J} F={self.F}"
     def __repr__(self):
         return self.__str__()

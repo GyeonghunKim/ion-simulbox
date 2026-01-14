@@ -1,0 +1,9 @@
+Metadata-Version: 2.4
+Name: ion_simulbox
+Version: 1.0
+Summary: Ion-laser-cavity simulation toolbox
+Author: Gyeonghun Kim
+Author-email: gyeonghun.kim@duke.edu
+Dynamic: author
+Dynamic: author-email
+Dynamic: summary
