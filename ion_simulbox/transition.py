@@ -103,5 +103,3 @@ class Transition:
             raise NotImplementedError("Quadrupole transitions not implemented")
         else:
             raise ValueError("Transition order not supported")
-
-    

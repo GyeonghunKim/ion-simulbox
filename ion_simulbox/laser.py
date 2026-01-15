@@ -1,6 +1,16 @@
-from typing import Callable
+from typing import Optional
 from .units import Constants
 import numpy as np
+
+
+class EnvelopeFactory:
+    @staticmethod
+    def square_factory(t_start, duration: float):
+        return lambda t: 1 if t_start <= t < t_start + duration else 0
+
+    @staticmethod
+    def gaussian_factory(t_center: float, sigma: float):
+        return lambda t: np.exp(-((t - t_center) ** 2) / (2 * sigma**2))
 
 
 class Polarization:
@@ -45,9 +55,9 @@ class Laser:
         self,
         name: str,
         frequency: float,
-        intensity: float,
-        line_width: float,
         polarization: Polarization,
+        intensity: Optional[float] = 0,
+        line_width: Optional[float] = 0,
     ):
         self.name = name
         self.frequency = frequency
@@ -59,12 +69,3 @@ class Laser:
 
     def get_electric_field_amplitude(self):
         return np.sqrt(2 * self.intensity / (Constants.c * Constants.epsilon_0))
-
-
-class EnvelopeFactory:
-    @staticmethod
-    def square_factory(t_start, duration: float):
-        return lambda t: 1 if t_start <= t < t_start + duration else 0
-    @staticmethod
-    def gaussian_factory(t_center: float, sigma: float):
-        return lambda t: np.exp(-(t - t_center)**2 / (2 * sigma**2))

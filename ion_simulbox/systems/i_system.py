@@ -5,8 +5,11 @@ from ..energy_level import EnergyLevel
 from ..transition import Transition
 from ..units import Constants
 
-class SingleLaserSystem:
-    def __init__(self, ion, lower_states, upper_states, laser, envelope_function,reference_state):
+
+class ISystem:
+    def __init__(
+        self, ion, lower_states, upper_states, laser, envelope_function, reference_state
+    ):
         self.ion = ion
         self.lower_states = lower_states
         self.upper_states = upper_states
@@ -19,7 +22,7 @@ class SingleLaserSystem:
         self._setup_atomic_hamiltonian()
         self._setup_laser_hamiltonian()
         self._setup_measurement_ops()
-        
+
     def _setup_basis(self):
         self.basis = {}
         i_basis = 0
@@ -37,26 +40,60 @@ class SingleLaserSystem:
             if state_from in self.basis.keys():
                 if state_to in self.basis.keys():
                     self.collapse_ops.append(
-                        np.sqrt(coef) * self.basis[state_to] * self.basis[state_from].dag()
+                        np.sqrt(coef)
+                        * self.basis[state_to]
+                        * self.basis[state_from].dag()
                     )
                 else:
                     self.collapse_ops.append(
-                        np.sqrt(coef) * self.basis["dummy"] * self.basis[state_from].dag()
+                        np.sqrt(coef)
+                        * self.basis["dummy"]
+                        * self.basis[state_from].dag()
                     )
-           
+
     def _setup_atomic_hamiltonian(self):
         self.H0 = qutip.qzero(self.n_system)
         for state in self.lower_states:
-            self.H0 = self.H0 + 2 * np.pi * (state.energy - self.reference_state.energy) / Constants.h * self.basis[state] * self.basis[state].dag()
+            self.H0 = (
+                self.H0
+                + 2
+                * np.pi
+                * (state.energy - self.reference_state.energy)
+                / Constants.h
+                * self.basis[state]
+                * self.basis[state].dag()
+            )
         for state in self.upper_states:
-            self.H0 = self.H0 + 2 * np.pi * ((state.energy - self.reference_state.energy) / Constants.h - self.laser.frequency) * self.basis[state] * self.basis[state].dag()
-    
+            self.H0 = (
+                self.H0
+                + 2
+                * np.pi
+                * (
+                    (state.energy - self.reference_state.energy) / Constants.h
+                    - self.laser.frequency
+                )
+                * self.basis[state]
+                * self.basis[state].dag()
+            )
+
     def _setup_laser_hamiltonian(self):
         self.H_laser = qutip.qzero(self.n_system)
-        for (state_1, state_2) in product(self.lower_states, self.upper_states):
+        for state_1, state_2 in product(self.lower_states, self.upper_states):
             transition = Transition(state_1, state_2, self.laser)
-            self.H_laser = self.H_laser + transition.rabi_frequency / 2 * self.basis[transition.lower_level] * self.basis[transition.upper_level].dag()
-            self.H_laser = self.H_laser + transition.rabi_frequency.conj() / 2 * self.basis[transition.upper_level] * self.basis[transition.lower_level].dag()
+            self.H_laser = (
+                self.H_laser
+                + transition.rabi_frequency
+                / 2
+                * self.basis[transition.lower_level]
+                * self.basis[transition.upper_level].dag()
+            )
+            self.H_laser = (
+                self.H_laser
+                + transition.rabi_frequency.conj()
+                / 2
+                * self.basis[transition.upper_level]
+                * self.basis[transition.lower_level].dag()
+            )
 
     def _setup_measurement_ops(self):
         self.measurement_ops = []
@@ -70,10 +107,13 @@ class SingleLaserSystem:
         self.measurement_ops.append(self.basis["dummy"] * self.basis["dummy"].dag())
         self.measurement_ops_names.append("dummy")
 
-
     def solve(self, initial_state, t_list):
         result = qutip.mesolve(
-            [self.H0, [self.H_laser, self.envelope_function]], initial_state, t_list, c_ops=self.collapse_ops, e_ops=self.measurement_ops,
+            [self.H0, [self.H_laser, self.envelope_function]],
+            initial_state,
+            t_list,
+            c_ops=self.collapse_ops,
+            e_ops=self.measurement_ops,
             options={"store_states": True},
         )
         return dict(zip(self.measurement_ops_names, result.expect)), result.final_state

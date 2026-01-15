@@ -10,6 +10,13 @@ class Units:
     s = 1
     A = 1
 
+    # Time units
+    fs = 1e-15 * s
+    ps = 1e-12 * s
+    ns = 1e-9 * s
+    us = 1e-6 * s
+    ms = 1e-3 * s
+
     # Length units
     cm = 1e-2 * m
     mm = 1e-3 * m

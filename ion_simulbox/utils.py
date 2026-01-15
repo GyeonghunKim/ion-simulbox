@@ -39,3 +39,7 @@ def sympy_to_number(sympy_number):
 
 def get_resonant_frequency(level_1: EnergyLevel, level_2: EnergyLevel):
     return abs(level_1.energy - level_2.energy) / Constants.h
+
+
+def intensity_from_power_and_radius(power: float, radius: float):
+    return 2 * power / (np.pi * radius**2)
